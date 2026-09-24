@@ -14,15 +14,15 @@ RUN apk add --no-cache \
         curl \
         make
 
-# Clone and build obfs4proxy (obfs4 transport)
+# Clone and build obfs4proxy (now called lyrebird, includes obfs4 transport)
 # https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4.git
 RUN git clone --depth 1 https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4.git /src/obfs4 && \
-    cd /src/obfs4/obfs4proxy && \
+    cd /src/obfs4/cmd/lyrebird && \
     go build -ldflags="-s -w" -o /usr/bin/obfs4proxy
 
 # Clone and build snowflake-client (WebRTC transport)
-# https://gitlab.torproject.org/tpo/anti-censorship/web/snowflake.git
-RUN git clone --depth 1 https://gitlab.torproject.org/tpo/anti-censorship/web/snowflake.git /src/snowflake && \
+# https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git
+RUN git clone --depth 1 https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git /src/snowflake && \
     cd /src/snowflake/client && \
     go build -ldflags="-s -w" -o /usr/bin/snowflake-client
 
