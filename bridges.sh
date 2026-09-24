@@ -26,16 +26,79 @@ echo "Log notice file /var/log/tor/notices.log" >> /etc/tor/torrc
 echo "DNSPort 0.0.0.0:9053" >> /etc/tor/torrc
 echo "SocksPort 0.0.0.0:9150" >> /etc/tor/torrc
 
-# Add bridges if present
+# Parse bridges.txt and configure appropriate transport plugins
+# Supported formats:
+#   obfs4 <fingerprint> <ip>:<port> <cert> <iat-mode>
+#   snowflake <domain>
+#   meek_lite <domain> [endpoint-domain]
+#   webtunnel <domain> <server-key>
+#   dnstt <subdomain>
+#
+# Lines starting with # are comments (skipped)
+
 if [[ -s ${BRIDGES} ]]; then
-    echo "UseBridges 1" >> /etc/tor/torrc
-    echo "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy" >> /etc/tor/torrc
-    while IFS= read -r BRIDGE; do
+    while IFS= read -r LINE; do
         # Skip empty lines and comments
-        [[ -z "$BRIDGE" || "$BRIDGE" =~ ^# ]] && continue
-        echo "Bridge ${BRIDGE}" >> /etc/tor/torrc
+        [[ -z "$LINE" || "$LINE" =~ ^[[:space:]]*# ]] && continue
+        
+        # Determine bridge type by first token after "Bridge "
+        BRIDGE_LINE=$(echo "$LINE" | sed 's/^Bridge[[:space:]]*//')
+        FIRST_TOKEN=$(echo "$BRIDGE_LINE" | awk '{print $1}')
+        
+        case "$FIRST_TOKEN" in
+            obfs4)
+                echo "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy" >> /etc/tor/torrc
+                echo "Bridge ${LINE}" >> /etc/tor/torrc
+                log "Added obfs4 bridge: ${BRIDGE_LINE:0:50}..."
+                ;;
+            snowflake)
+                echo "ClientTransportPlugin snowflake exec /usr/bin/snowflake-client" >> /etc/tor/torrc
+                echo "Bridge ${LINE}" >> /etc/tor/torrc
+                log "Added snowflake bridge: ${BRIDGE_LINE:0:50}..."
+                ;;
+            meek_lite)
+                echo "ClientTransportPlugin meek exec /usr/bin/meek-client" >> /etc/tor/torrc
+                echo "Bridge ${LINE}" >> /etc/tor/torrc
+                log "Added meek bridge: ${BRIDGE_LINE:0:50}..."
+                ;;
+            webtunnel)
+                echo "ClientTransportPlugin webtunnel exec /usr/bin/webtunnel" >> /etc/tor/torrc
+                echo "Bridge ${LINE}" >> /etc/tor/torrc
+                log "Added webtunnel bridge: ${BRIDGE_LINE:0:50}..."
+                ;;
+            dnstt)
+                echo "ClientTransportPlugin dnstt exec /usr/bin/dnstt" >> /etc/tor/torrc
+                echo "Bridge ${LINE}" >> /etc/tor/torrc
+                log "Added dnstt bridge: ${BRIDGE_LINE:0:50}..."
+                ;;
+            *)
+                # Standard bridge (direct obfs4 format without prefix)
+                # Try to detect type from fingerprint pattern
+                if echo "$BRIDGE_LINE" | grep -qi "obfs4 "; then
+                    echo "ClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy" >> /etc/tor/torrc
+                    echo "Bridge ${LINE}" >> /etc/tor/torrc
+                    log "Added obfs4 bridge: ${BRIDGE_LINE:0:50}..."
+                elif echo "$BRIDGE_LINE" | grep -qi "snowflake "; then
+                    echo "ClientTransportPlugin snowflake exec /usr/bin/snowflake-client" >> /etc/tor/torrc
+                    echo "Bridge ${LINE}" >> /etc/tor/torrc
+                    log "Added snowflake bridge: ${BRIDGE_LINE:0:50}..."
+                elif echo "$BRIDGE_LINE" | grep -qi "meek_lite "; then
+                    echo "ClientTransportPlugin meek exec /usr/bin/meek-client" >> /etc/tor/torrc
+                    echo "Bridge ${LINE}" >> /etc/tor/torrc
+                    log "Added meek bridge: ${BRIDGE_LINE:0:50}..."
+                else
+                    echo "Bridge ${LINE}" >> /etc/tor/torrc
+                    log "Added standard bridge: ${BRIDGE_LINE:0:50}..."
+                fi
+                ;;
+        esac
     done < ${BRIDGES}
-    log "Bridges loaded from ${BRIDGES}"
+    
+    # Enable bridges if any were loaded
+    if grep -q "Bridge " /etc/tor/torrc; then
+        echo "UseBridges 1" >> /etc/tor/torrc
+        log "Bridges enabled"
+    fi
 else
     log "No bridges configured"
 fi

@@ -1,21 +1,22 @@
-ARG ALPINE_VERSION=3.20
+ARG ALPINE_VERSION=3.19
 
 FROM alpine:${ALPINE_VERSION}
 
 ENV TZ=Europe/Moscow
 
-# Install logrotate for log management
+# Add edge/community for pluggable transports
 RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
-    echo '@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories && \
     apk -U upgrade && \
     apk -v add --no-cache \
-        tor@edgecommunity \
-        obfs4proxy@testing \
+        tor \
+        obfs4proxy \
+        snowflake-client \
+        meek \
         bash \
         curl \
         nginx \
-        php82-fpm \
-        php82-session \
+        php81-fpm \
+        php81-session \
         apache2-utils \
         logrotate && \
     rm -rf /var/cache/apk/* && \
@@ -32,8 +33,8 @@ COPY --chown=root:root logrotate/tor.conf /etc/logrotate.d/tor
 COPY --chown=root:root logrotate/nginx.conf /etc/logrotate.d/nginx
 COPY --chown=root:root logrotate/php-fpm.conf /etc/logrotate.d/php-fpm
 COPY --chown=tor:root nginx.conf /etc/nginx/
-COPY --chown=tor:root php-fpm.conf /etc/php82/
-COPY --chown=tor:root www.conf /etc/php82/php-fpm.d/
+COPY --chown=tor:root php-fpm.conf /etc/php81/
+COPY --chown=tor:root www.conf /etc/php81/php-fpm.d/
 COPY --chown=tor:root bridges.sh /srv/
 COPY --chown=tor:root pwd.sh /srv/
 COPY --chown=tor:root tor-bridges-proxy /srv/
