@@ -1,43 +1,14 @@
-# Multi-stage build: first compile pluggable transports, then package
+# Tor Bridges Proxy Dockerfile
+# Supports: obfs4, snowflake, meek, webtunnel (via lyrebird)
 ARG ALPINE_VERSION=3.19
+ARG TOR_EXPERT_BUNDLE_VERSION=13.0.11
 
-# ─── Builder stage ───────────────────────────────────────────────────────────
-FROM alpine:${ALPINE_VERSION} AS builder
-
-ENV TZ=Europe/Moscow
-
-# Install build dependencies
-RUN apk add --no-cache \
-        git \
-        go \
-        ca-certificates \
-        curl \
-        make
-
-# Clone and build obfs4proxy (now called lyrebird, includes obfs4 transport)
-# https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4.git
-RUN git clone --depth 1 https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/obfs4.git /src/obfs4 && \
-    cd /src/obfs4/cmd/lyrebird && \
-    go build -ldflags="-s -w" -o /usr/bin/obfs4proxy
-
-# Clone and build snowflake-client (WebRTC transport)
-# https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git
-RUN git clone --depth 1 https://gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/snowflake.git /src/snowflake && \
-    cd /src/snowflake/client && \
-    go build -ldflags="-s -w" -o /usr/bin/snowflake-client
-
-# Clone and build meek-client (domain fronting transport)
-# https://git.torproject.org/pluggable-transports/meek.git
-RUN git clone --depth 1 https://git.torproject.org/pluggable-transports/meek.git /src/meek && \
-    cd /src/meek && \
-    go build -ldflags="-s -w" -o /usr/bin/meek-client
-
-# ─── Final stage ─────────────────────────────────────────────────────────────
 FROM alpine:${ALPINE_VERSION}
 
 ENV TZ=Europe/Moscow
 
-# Add edge/community for meek-server (optional, for advanced users)
+# Install base packages + download Tor Expert Bundle (includes lyrebird with all PTs)
+# lyrebird supports: obfs4, snowflake, meek, webtunnel
 RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
     apk -U upgrade && \
     apk -v add --no-cache \
@@ -48,17 +19,26 @@ RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >
         php81-fpm \
         php81-session \
         apache2-utils \
-        logrotate && \
+        logrotate \
+        xz \
+        tar && \
     rm -rf /var/cache/apk/* && \
     chmod 700 /var/lib/tor && \
-    mkdir -p /var/www /var/log/nginx /var/log/php-fpm /etc/logrotate.d && \
+    mkdir -p /var/www /var/log/nginx /var/log/php-fpm /etc/logrotate.d /usr/local/bin && \
     chown tor:root /var/www /var/log/tor && \
-    chmod 755 /var/log/tor
-
-# Copy compiled pluggable transports from builder
-COPY --from=builder /usr/bin/obfs4proxy /usr/bin/obfs4proxy
-COPY --from=builder /usr/bin/snowflake-client /usr/bin/snowflake-client
-COPY --from=builder /usr/bin/meek-client /usr/bin/meek-client
+    chmod 755 /var/log/tor && \
+    # Download Tor Expert Bundle with lyrebird
+    curl -L --fail -o /tmp/tor-expert-bundle.tar.xz "https://archive.torproject.org/tor-package-archive/torbrowser/${TOR_EXPERT_BUNDLE_VERSION}/tor-expert-bundle-linux-x86_64-${TOR_EXPERT_BUNDLE_VERSION}.tar.xz" && \
+    # Extract lyrebird from the bundle
+    tar -xf /tmp/tor-expert-bundle.tar.xz -C /tmp/ && \
+    mv /tmp/tor/pluggable_transports/lyrebird /usr/local/bin/lyrebird && \
+    chmod +x /usr/local/bin/lyrebird && \
+    # Create symlinks for backward compatibility
+    ln -sf /usr/local/bin/lyrebird /usr/bin/obfs4proxy && \
+    ln -sf /usr/local/bin/lyrebird /usr/bin/snowflake-client && \
+    ln -sf /usr/local/bin/lyrebird /usr/bin/meek-client && \
+    # Clean up
+    rm -rf /tmp/tor /tmp/tor-expert-bundle.tar.xz
 
 # Copy application files
 COPY --chown=tor:root torrc /etc/tor/
@@ -78,6 +58,7 @@ COPY --chown=tor:root webroot/ /var/www/
 RUN chmod +x /srv/bridges.sh && \
     chmod +x /srv/pwd.sh && \
     chmod +x /srv/tor-bridges-proxy && \
+    chmod +x /usr/local/bin/lyrebird && \
     chmod +x /usr/bin/obfs4proxy && \
     chmod +x /usr/bin/snowflake-client && \
     chmod +x /usr/bin/meek-client
