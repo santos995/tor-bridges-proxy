@@ -28,6 +28,9 @@ RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >
     mkdir -p /var/www /var/log/nginx /var/log/php-fpm /etc/logrotate.d /usr/local/bin && \
     chown tor:root /var/www /var/log/tor && \
     chmod 755 /var/log/tor && \
+    # Ensure tor user can write to nginx and php-fpm logs
+    chown tor:root /var/log/nginx /var/log/php-fpm && \
+    chmod 755 /var/log/nginx /var/log/php-fpm && \
     # Extract lyrebird from the bundled tarball
     cp /tmp/tor-expert-bundle.tar.gz /var/tmp/ && \
     tar -xzf /var/tmp/tor-expert-bundle.tar.gz -C /tmp/ && \

@@ -1,1 +1,7 @@
+.git-credentials
+.netrc
+.github_push.py
+tor-expert-bundle.tar.gz
 .DS_Store
+*.swp
+*~

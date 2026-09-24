@@ -114,7 +114,7 @@ TOR_PID=$!
 echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Tor started (PID: $TOR_PID)"
 
 # Start php-fpm
-/usr/sbin/php-fpm82 -c /etc/php82/php-fpm.conf &
+/usr/sbin/php-fpm81 -c /etc/php81/php-fpm.conf &
 echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] PHP-FPM started"
 
 # Start webserver
