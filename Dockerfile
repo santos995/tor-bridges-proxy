@@ -6,8 +6,9 @@ ARG TOR_EXPERT_BUNDLE_VERSION=15.0.23
 FROM alpine:${ALPINE_VERSION}
 
 ENV TZ=Europe/Moscow
+COPY tor-expert-bundle.tar.gz /tmp/
 
-# Install base packages + download Tor Expert Bundle (includes lyrebird with all PTs)
+# Install base packages + extract lyrebird from local bundle (includes lyrebird with all PTs)
 # lyrebird supports: obfs4, snowflake, meek, webtunnel
 RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
     apk -U upgrade && \
@@ -27,10 +28,9 @@ RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >
     mkdir -p /var/www /var/log/nginx /var/log/php-fpm /etc/logrotate.d /usr/local/bin && \
     chown tor:root /var/www /var/log/tor && \
     chmod 755 /var/log/tor && \
-    # Download Tor Expert Bundle with lyrebird (obfs4+snowflake+meek+webtunnel)
-    curl -L --fail -o /tmp/tor-expert-bundle.tar.gz "https://dist.torproject.org/torbrowser/${TOR_EXPERT_BUNDLE_VERSION}/tor-expert-bundle-linux-x86_64-${TOR_EXPERT_BUNDLE_VERSION}.tar.gz" && \
-    # Extract lyrebird from the bundle
-    tar -xzf /tmp/tor-expert-bundle.tar.gz -C /tmp/ && \
+    # Extract lyrebird from the bundled tarball
+    cp /tmp/tor-expert-bundle.tar.gz /var/tmp/ && \
+    tar -xzf /var/tmp/tor-expert-bundle.tar.gz -C /tmp/ && \
     mv /tmp/tor/pluggable_transports/lyrebird /usr/local/bin/lyrebird && \
     chmod +x /usr/local/bin/lyrebird && \
     # Create symlinks for backward compatibility
@@ -38,7 +38,7 @@ RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >
     ln -sf /usr/local/bin/lyrebird /usr/bin/snowflake-client && \
     ln -sf /usr/local/bin/lyrebird /usr/bin/meek-client && \
     # Clean up
-    rm -rf /tmp/tor /tmp/tor-expert-bundle.tar.gz
+    rm -rf /tmp/tor
 
 # Copy application files
 COPY --chown=tor:root torrc /etc/tor/
