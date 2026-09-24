@@ -1,28 +1,35 @@
 # Tor Bridges
 # Add your bridges here, one per line
 #
-# Supported bridge types:
+# Supported bridge types (all are auto-detected):
 #
-# OBFS4 (most common):
-#   Bridge obfs4 <fingerprint> <ip>:<port> <cert> <iat-mode>
-#   Example: Bridge obfs4 AAAA... 192.0.2.1:443 cert=abcd... iat=strobe
-#
-# SNOWFLAKE (WebRTC-based, works through most firewalls):
-#   Bridge snowflake <proxy-domain>
-#   Example: Bridge snowflake https://snowflake.torproject.org
-#
-# MEEK (Azure/AWS fronting):
-#   Bridge meek_lite <domain> [endpoint-domain]
-#   Example: Bridge meek_lite 0.0.0.0:0 https://fastmail.com
-#
-# WEBTUNNEL (requires separate binary not in Alpine repo):
-#   Bridge webtunnel <domain> <server-key>
-#
-# DNSTT (DNS tunneling, requires separate binary not in Alpine repo):
-#   Bridge dnstt <subdomain>
-#
+# ─── OBFS4 (most common, prebuilt in Alpine) ───
+# Bridge obfs4 <fingerprint> <ip>:<port> <cert> <iat-mode>
+# Example:
+# Bridge obfs4 AAAA... 192.0.2.1:443 cert=abcd1234... iat=strobe
+
+# ─── SNOWFLAKE (WebRTC, good for heavy censorship) ───
+# Bridge snowflake <proxy-domain>
+# Example:
+# Bridge snowflake https://torproject.org
+
+# ─── MEEK (domain fronting via CDNs) ───
+# Bridge meek_lite <domain> [endpoint-domain]
+# Example:
+# Bridge meek_lite 0.0.0.0:0 https://fastmail.com
+
+# ─── WEBTUNNEL (requires manual install, see README) ───
+# Bridge webtunnel <domain> <server-key>
+# Example:
+# Bridge webtunnel example.com AAAAAAAAAAAAAA
+
+# ─── DNSTT (DNS tunneling, requires manual install, see README) ───
+# Bridge dnstt <subdomain>
+# Example:
+# Bridge dnstt test
+
 # Notes:
-# - Lines starting with # are treated as comments and ignored
+# - Lines starting with # are comments (skipped)
 # - Empty lines are ignored
-# - Obfs4, snowflake, and meek are built-in to Alpine packages
-# - Webtunnel and dnstt are NOT available in Alpine — see README for manual installation
+# - obfs4, snowflake, and meek are prebuilt and ready to use
+# - webtunnel and dnstt are NOT prebuilt — see README for instructions
