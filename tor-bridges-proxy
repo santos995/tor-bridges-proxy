@@ -1,16 +1,158 @@
 #!/bin/bash
 
+# Tor Bridges Proxy — Main entrypoint
+
+# Log start
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] tor-bridges-proxy starting..."
+
+# --- Version tracking ---
+VERSION_FILE="/srv/VERSION"
+TOR_VERSION_FILE="/var/lib/tor/.tor_version"
+
+# Check Tor version on startup
+TOR_VERSION=$(tor --version 2>/dev/null | head -1 | grep -oP 'Tor version \K[0-9.]+')
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Tor version: ${TOR_VERSION:-unknown}"
+
+# Check if update is needed
+AUTO_UPDATE="true"  # Set to "false" to disable auto-updates
+UPDATE_CHECK_INTERVAL=86400  # Check every 24 hours (in seconds)
+LAST_UPDATE_FILE="/var/lib/tor/.last_update_check"
+
+should_update() {
+    if [ "$AUTO_UPDATE" != "true" ]; then
+        return 1
+    fi
+    
+    local now
+    now=$(date +%s)
+    
+    # If never checked
+    if [ ! -f "$LAST_UPDATE_FILE" ]; then
+        return 0
+    fi
+    
+    local last_check
+    last_check=$(cat "$LAST_UPDATE_FILE" 2>/dev/null || echo 0)
+    local diff=$((now - last_check))
+    
+    if [ "$diff" -ge "$UPDATE_CHECK_INTERVAL" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+update_tor() {
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Checking for Tor updates..."
+    
+    local current_version
+    current_version=$(tor --version 2>/dev/null | head -1 | grep -oP 'Tor version \K[0-9.]+')
+    
+    # Stop Tor before update
+    if pgrep -x tor > /dev/null; then
+        echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Stopping Tor for update..."
+        pkill tor
+        sleep 2
+    fi
+    
+    # Upgrade via apk
+    if apk upgrade tor@edgecommunity 2>&1; then
+        local new_version
+        new_version=$(tor --version 2>/dev/null | head -1 | grep -oP 'Tor version \K[0-9.]+')
+        
+        if [ "$new_version" != "$current_version" ]; then
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Tor updated: ${current_version} -> ${new_version}"
+            # Update version file
+            echo "${new_version} ($(date -u '+%Y-%m-%dT%H:%M:%SZ'))" > "$TOR_VERSION_FILE"
+            
+            # Restart Tor with new version
+            /usr/bin/tor -f /etc/tor/torrc &
+            return 0
+        else
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Tor is already up to date: ${current_version}"
+        fi
+    else
+        echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Update check failed, trying full upgrade..."
+        if apk upgrade 2>&1; then
+            local new_version
+            new_version=$(tor --version 2>/dev/null | head -1 | grep -oP 'Tor version \K[0-9.]+')
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Full system upgrade done, Tor: ${new_version}"
+        fi
+    fi
+    
+    # Update last check timestamp
+    date +%s > "$LAST_UPDATE_FILE"
+    
+    return $?
+}
+
+# Check for updates on startup
+if should_update; then
+    update_tor
+else
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')} Skipping update check (last check: $(date -d @$(cat "$LAST_UPDATE_FILE" 2>/dev/null || echo 0) -u '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'never'))]"
+fi
+
+# Background update checker (runs every hour after initial check)
+background_update() {
+    while true; do
+        sleep 3600
+        if should_update; then
+            update_tor
+        fi
+    done
+}
+
+background_update &
+UPDATE_PID=$!
+
+# --- Start services ---
+
 # Start Tor
 /usr/bin/tor -f /etc/tor/torrc &
+TOR_PID=$!
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Tor started (PID: $TOR_PID)"
 
 # Start php-fpm
 /usr/sbin/php-fpm8 -c /etc/php8/php-fpm.conf &
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] PHP-FPM started"
 
 # Start webserver
-/usr/sbin/nginx -e /dev/stderr -c /etc/nginx/nginx.conf &
+/usr/sbin/nginx -c /etc/nginx/nginx.conf &
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Nginx started"
 
 # Generate password and salt (if not exists)
 /srv/pwd.sh
+
+echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] All services started"
+
+# Signal handler for graceful shutdown
+shutdown() {
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Shutting down..."
+    
+    # Kill background update checker
+    if [ -n "$UPDATE_PID" ]; then
+        kill "$UPDATE_PID" 2>/dev/null
+        wait "$UPDATE_PID" 2>/dev/null
+    fi
+    
+    # Stop Tor
+    if pgrep -x tor > /dev/null; then
+        echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Stopping Tor..."
+        pkill -TERM tor
+        sleep 3
+        pkill -9 tor 2>/dev/null
+    fi
+    
+    # Stop nginx
+    if [ -f /tmp/nginx.pid ]; then
+        nginx -s quit 2>/dev/null
+    fi
+    
+    echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] Shutdown complete"
+}
+
+trap shutdown SIGTERM SIGINT
 
 # Wait for any process to exit
 wait -n

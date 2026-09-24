@@ -1,18 +1,36 @@
-FROM alpine:3.15.4
+ARG ALPINE_VERSION=3.20
+
+FROM alpine:${ALPINE_VERSION}
 
 ENV TZ=Europe/Moscow
 
+# Install logrotate for log management
 RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories && \
     echo '@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing' >> /etc/apk/repositories && \
     apk -U upgrade && \
-    apk -v add --no-cache tor@edgecommunity obfs4proxy@testing bash curl nginx php8-fpm php8-session apache2-utils && \
+    apk -v add --no-cache \
+        tor@edgecommunity \
+        obfs4proxy@testing \
+        bash \
+        curl \
+        nginx \
+        php8-fpm \
+        php8-session \
+        apache2-utils \
+        logrotate && \
     rm -rf /var/cache/apk/* && \
     chmod 700 /var/lib/tor && \
-    mkdir -p /var/www && \
-    chown tor:root /var/www/
+    mkdir -p /var/www /var/log/nginx /var/log/php-fpm /etc/logrotate.d && \
+    chown tor:root /var/www /var/log/tor && \
+    chmod 755 /var/log/tor
 
+# Copy application files
 COPY --chown=tor:root torrc /etc/tor/
 COPY --chown=tor:root bridges.txt /etc/tor/
+COPY --chown=tor:root VERSION /srv/
+COPY --chown=root:root logrotate/tor.conf /etc/logrotate.d/tor
+COPY --chown=root:root logrotate/nginx.conf /etc/logrotate.d/nginx
+COPY --chown=root:root logrotate/php-fpm.conf /etc/logrotate.d/php-fpm
 COPY --chown=tor:root nginx.conf /etc/nginx/
 COPY --chown=tor:root php-fpm.conf /etc/php8/
 COPY --chown=tor:root www.conf /etc/php8/php-fpm.d/
