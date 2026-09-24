@@ -14,8 +14,8 @@ RUN echo '@edgecommunity https://dl-cdn.alpinelinux.org/alpine/edge/community' >
         bash \
         curl \
         nginx \
-        php8-fpm \
-        php8-session \
+        php82-fpm \
+        php82-session \
         apache2-utils \
         logrotate && \
     rm -rf /var/cache/apk/* && \
@@ -32,8 +32,8 @@ COPY --chown=root:root logrotate/tor.conf /etc/logrotate.d/tor
 COPY --chown=root:root logrotate/nginx.conf /etc/logrotate.d/nginx
 COPY --chown=root:root logrotate/php-fpm.conf /etc/logrotate.d/php-fpm
 COPY --chown=tor:root nginx.conf /etc/nginx/
-COPY --chown=tor:root php-fpm.conf /etc/php8/
-COPY --chown=tor:root www.conf /etc/php8/php-fpm.d/
+COPY --chown=tor:root php-fpm.conf /etc/php82/
+COPY --chown=tor:root www.conf /etc/php82/php-fpm.d/
 COPY --chown=tor:root bridges.sh /srv/
 COPY --chown=tor:root pwd.sh /srv/
 COPY --chown=tor:root tor-bridges-proxy /srv/
